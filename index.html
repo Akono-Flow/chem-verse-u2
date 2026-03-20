@@ -259,6 +259,7 @@ let appState={
 
 function getDefaultData(){
   // Password is stored as a SHA-256 hash — never the plain text.
+  // Default is hash of 'teacher2024'. Change via Settings after first login.
   return {meta:{title:'Chemistry Learning Lab',subtitle:'CAPE Chemistry Unit 2',passwordHash:'e76c083cdb3d449f169b1047f94e047cc2ee6f74a3c2439d0a2e8ea2494e2213'},topics:{}};
 }
 function save(){
@@ -1755,7 +1756,7 @@ function importAllData(){
             <div class="form-group"><label class="form-label">Import Mode</label>
               <div style="display:flex;flex-direction:column;gap:.5rem">
                 <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer"><input type="radio" name="imp-mode" value="replace" checked> <span><strong>Replace</strong> — replace all existing data with imported data</span></label>
-                <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer"><input type="radio" name="imp-mode" value="merge"> <span><strong>Merge</strong> — add imported topics to existing data (existing topics updated)</span></label>
+                <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer"><input type="radio" name="imp-mode" value="merge"> <span><strong>Merge</strong> — add topics/questions to existing data; content and questions are combined, never overwritten</span></label>
               </div>
             </div>`,
             buttons:[{label:'Cancel',cls:'btn-ghost',fn:'closeModal()'},
@@ -1775,22 +1776,55 @@ function doImport(){
   if(mode==='replace'){
     appData=parsed;
   } else {
-    Object.assign(appData.topics,parsed.topics||{});
+    deepMergeTopics(appData.topics, parsed.topics||{});
     if(parsed.meta?.title)appData.meta.title=parsed.meta.title;
   }
   save();closeModal();renderMain();showToast('Import successful','success');
 }
+/* Deep-merge imported topics into existing topics.
+   Rules:
+   - New topic (ID not yet in appData): add it wholesale.
+   - Existing topic:
+       • title: update only if incoming has one.
+       • learnBlocks: replace only if incoming has ≥1 block (empty array = no-op).
+       • practice: APPEND incoming questions; never wipe existing ones.
+*/
+function deepMergeTopics(existing, incoming){
+  Object.keys(incoming).forEach(id=>{
+    const v=incoming[id];
+    if(!existing[id]){
+      // Brand-new topic — add as-is
+      existing[id]={
+        title:v.title||`Topic ${id}`,
+        learnBlocks:Array.isArray(v.learnBlocks)?v.learnBlocks:[],
+        practice:Array.isArray(v.practice)?v.practice:[]
+      };
+      return;
+    }
+    const t=existing[id];
+    // Title: update if incoming provides one
+    if(v.title)t.title=v.title;
+    // learnBlocks: only overwrite when incoming actually has blocks
+    if(Array.isArray(v.learnBlocks)&&v.learnBlocks.length>0)
+      t.learnBlocks=v.learnBlocks;
+    // practice: APPEND new questions — never replace
+    const incoming_q=Array.isArray(v.practice)?v.practice:[];
+    if(incoming_q.length>0)
+      t.practice=[...(t.practice||[]),...incoming_q];
+  });
+}
+
 function normalizeAndMerge(json){
-  // Handles ContentBuilder / MCQEditor exports
+  // Handles ContentBuilder / MCQEditor exports and our own topic-keyed files
+  deepMergeTopics(appData.topics, json);
+  // Legacy: bare arrays keyed by topic id
   Object.keys(json).forEach(id=>{
     const v=json[id];
-    if(!appData.topics[id])appData.topics[id]={title:v.title||`Topic ${id}`,learnBlocks:[],practice:[]};
-    if(v.learnBlocks)appData.topics[id].learnBlocks=v.learnBlocks;
     if(v.learn&&!v.learnBlocks)appData.topics[id].learn=v.learn;
-    if(Array.isArray(v.practice))appData.topics[id].practice=v.practice;
-    else if(Array.isArray(v))appData.topics[id].practice=v;
+    if(Array.isArray(v)&&v.length>0)
+      appData.topics[id].practice=[...(appData.topics[id].practice||[]),...v];
   });
-  save();renderMain();showToast('Legacy import complete','success');
+  save();renderMain();showToast('Import complete — content and questions merged','success');
 }
 
 /* ================================================================
