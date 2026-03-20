@@ -258,7 +258,9 @@ let appState={
 };
 
 function getDefaultData(){
-  return {meta:{title:'Chemistry Learning Lab',subtitle:'CAPE Chemistry Unit 2',password:'teacher2024'},topics:{}};
+  // Password is stored as a SHA-256 hash — never the plain text.
+  // Default is hash of 'teacher2024'. Change via Settings after first login.
+  return {meta:{title:'Chemistry Learning Lab',subtitle:'CAPE Chemistry Unit 2',passwordHash:'e76c083cdb3d449f169b1047f94e047cc2ee6f74a3c2439d0a2e8ea2494e2213'},topics:{}};
 }
 function save(){
   try{localStorage.setItem(STORAGE_KEY,JSON.stringify(appData));}catch(e){}
@@ -308,7 +310,11 @@ async function init(){
     catch(e){appData=getDefaultData();}
   }
 
-  if(!appData.meta)appData.meta={title:'Chemistry Learning Lab',subtitle:'CAPE Chemistry',password:'teacher2024'};
+  if(!appData.meta)appData.meta={title:'Chemistry Learning Lab',subtitle:'CAPE Chemistry',passwordHash:'e76c083cdb3d449f169b1047f94e047cc2ee6f74a3c2439d0a2e8ea2494e2213'};
+  // Migrate old plain-text password to hash if an old export is loaded
+  if(appData.meta.password&&!appData.meta.passwordHash){
+    hashPassword(appData.meta.password).then(h=>{appData.meta.passwordHash=h;delete appData.meta.password;save();});
+  }
   renderMain();
 }
 
@@ -345,9 +351,18 @@ function showPasswordModal(){
              {label:'Login →',cls:'btn-accent',fn:'attemptLogin()'}]});
   setTimeout(()=>document.getElementById('pw-inp')?.focus(),80);
 }
-function attemptLogin(){
+// Hash a password string using SHA-256 (browser built-in, no library needed)
+async function hashPassword(pw){
+  const buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function attemptLogin(){
   const pw=document.getElementById('pw-inp')?.value||'';
-  if(pw===(appData.meta.password||'teacher2024')){
+  if(!pw)return;
+  const hash=await hashPassword(pw);
+  const stored=appData.meta.passwordHash||'e76c083cdb3d449f169b1047f94e047cc2ee6f74a3c2439d0a2e8ea2494e2213';
+  if(hash===stored){
     appState.teacherMode=true;
     document.getElementById('teacher-chip').classList.remove('hidden');
     document.getElementById('lock-btn').textContent='🔓';
@@ -1103,13 +1118,16 @@ function saveMeta(){
   document.getElementById('hdr-app-title').textContent=appData.meta.title;
   save();showToast('Settings saved','success');
 }
-function changePassword(){
+async function changePassword(){
   const p1=document.getElementById('set-pw1')?.value||'';
   const p2=document.getElementById('set-pw2')?.value||'';
   if(!p1){showToast('Enter a new password','error');return;}
   if(p1!==p2){showToast('Passwords do not match','error');return;}
   if(p1.length<4){showToast('Password too short (min 4 chars)','error');return;}
-  appData.meta.password=p1;save();showToast('Password changed','success');
+  // Store only the hash — the plain password is never saved anywhere
+  appData.meta.passwordHash=await hashPassword(p1);
+  delete appData.meta.password; // remove plain-text field if it existed
+  save();showToast('Password changed successfully','success');
   document.getElementById('set-pw1').value='';
   document.getElementById('set-pw2').value='';
 }
