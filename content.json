@@ -3116,7 +3116,7 @@
             "Benzene ring with two -O-CO-CH₃ groups (both OH groups esterified)",
             "Benzene ring with -OH and -C(=O)-O-C(=O)-CH₃ mixed anhydride"
           ],
-          "correct": 0,
+          "correct": 1,
           "explanation": "**Salicylic acid** has two functional groups: $\\ce{-COOH}$ and phenolic $\\ce{-OH}$ (ortho position on ring).\n\nEthanoyl chloride ($\\ce{CH3COCl}$) reacts with the **phenolic $\\ce{-OH}$ group** (more reactive nucleophile than $\\ce{-COOH}$):\n$$\\ce{Ar-OH + CH3COCl -> Ar-OOCCH3 + HCl}$$\n\nThe **$\\ce{-COOH}$** remains unchanged. The phenolic OH is converted to **$\\ce{-OOCCH3}$** (ester linkage).\n\nThe product is **aspirin** (acetylsalicylic acid): benzene ring with $\\ce{-COOH}$ and $\\ce{-OOCCH3}$ groups."
         },
         {
