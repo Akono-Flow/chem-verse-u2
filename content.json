@@ -29,7 +29,7 @@
             "1"
           ],
           "correct": 1,
-          "explanation": "Only three isomers possible.\nn-pentane (straight chain)\n2-methylbutane (one branch)\n2, 2-dimethylpropane (highly branched)"
+          "explanation": "Only three isomers possible.\n n-pentane (straight chain)\n 2-methylbutane (one branch)\n 2, 2-dimethylpropane (highly branched)"
         }
       ]
     }
