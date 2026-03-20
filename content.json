@@ -12,10 +12,10 @@
         {
           "question": "The volatility of organic compounds depends on the strength of the intermolecular forces present. Which of the following compounds would be MOST volatile?",
           "options": [
-            "$\ce{CH3CH2CH2OH}$",
-            "$\ce{CH3CH2CH2CH3}$",
-            "$\ce{CH3CH(CH3)CH3}$",
-            "$\ce{CH3CH2CH2COOH}$"
+            "$\\ce{CH3CH2CH2OH}$",
+            "$\\ce{CH3CH2CH2CH3}$",
+            "$\\ce{CH3CH(CH3)CH3}$",
+            "$\\ce{CH3CH2CH2COOH}$"
           ],
           "correct": 2,
           "explanation": "It has the *weakest intermolecular forces* due to branching, making it the *most volatile*."
