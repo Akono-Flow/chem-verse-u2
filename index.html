@@ -92,6 +92,29 @@ hr.cv-divider{border:none;border-top:1px solid var(--border);margin:1.5rem 0}
 
 /* QUESTION CARD */
 .question-shell{max-width:740px;margin:0 auto}
+/* Free-navigation layout: palette sidebar + question area */
+.qmode-layout{display:grid;grid-template-columns:200px 1fr;gap:1.25rem;align-items:start;max-width:1060px;margin:0 auto}
+@media(max-width:700px){.qmode-layout{grid-template-columns:1fr}.qpalette-wrap{order:-1}}
+.qpalette-wrap{position:sticky;top:1rem}
+.qpalette-header{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:.6rem;display:flex;justify-content:space-between;align-items:center}
+.qpalette{display:grid;grid-template-columns:repeat(5,1fr);gap:.3rem;margin-bottom:.75rem}
+.qp-btn{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:6px;border:2px solid var(--border);background:var(--bg3);font-size:.75rem;font-weight:700;cursor:pointer;transition:all .12s;font-family:'IBM Plex Mono',monospace;color:var(--text2);padding:0}
+.qp-btn:hover{border-color:var(--accent);color:var(--accent)}
+.qp-btn.current{border-color:var(--accent);background:var(--glow);color:var(--accent)}
+.qp-btn.answered-correct{border-color:var(--success);background:rgba(34,197,94,.15);color:var(--success)}
+.qp-btn.answered-wrong{border-color:var(--danger);background:rgba(239,68,68,.12);color:var(--danger)}
+.qp-btn.answered-done{border-color:var(--info);background:rgba(56,189,248,.12);color:var(--info)}
+.qp-btn.skipped{border-color:var(--warning);background:rgba(245,158,11,.1);color:var(--warning)}
+.qpalette-legend{display:flex;flex-direction:column;gap:.3rem;font-size:.7rem;color:var(--text2);margin-bottom:.75rem}
+.qpalette-legend span{display:flex;align-items:center;gap:.4rem}
+.qpalette-legend i{width:10px;height:10px;border-radius:2px;display:inline-block;flex-shrink:0}
+.qp-end-btn{width:100%;padding:.55rem;border-radius:var(--radius);border:none;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .15s}
+/* Quiz total timer bar */
+.quiz-totalbar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:.6rem .85rem;margin-bottom:.75rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.quiz-totalbar-timer{font-family:'IBM Plex Mono',monospace;font-size:1.1rem;font-weight:800;color:var(--accent)}
+.quiz-totalbar-timer.urgent{color:var(--danger);animation:pulse .6s infinite alternate}
+.quiz-totalbar-progress{flex:1;height:6px;background:var(--bg3);border-radius:99px;overflow:hidden}
+.quiz-totalbar-fill{height:100%;background:var(--accent);border-radius:99px;transition:width .5s linear}
 .q-progress{display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem;font-size:.82rem;color:var(--text2)}
 .q-progress-bar{flex:1;height:5px;background:var(--bg3);border-radius:99px;overflow:hidden}
 .q-progress-fill{height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
@@ -656,39 +679,126 @@ function renderPractice(){
     }).join('')}
   </div>`;
 }
+
 function startPractice(id){
   const t=appData.topics[id];if(!t?.practice?.length)return;
   const qs=flattenQ(t.practice);
-  appState.practice={topicId:id,qs,cur:0,answered:Array(qs.length).fill(null),correct:0,wrong:0};
+  appState.practice={
+    topicId:id, qs, cur:0,
+    answered:Array(qs.length).fill(null),
+    correct:0, wrong:0
+  };
   appState.view='practice';
   renderMain();
 }
+
+function practicGoTo(idx){
+  appState.practice.cur=idx;
+  renderMain();
+}
+
 function renderPracticeQ(){
   const p=appState.practice;
-  if(p.cur>=p.qs.length)return renderPracticeResults();
-  const q=p.qs[p.cur],ans=p.answered[p.cur],pct=Math.round(p.cur/p.qs.length*100);
+  const q=p.qs[p.cur];
+  const ans=p.answered[p.cur];
+  const answeredCount=p.answered.filter(a=>a!==null).length;
   return `
-  <button class="back-btn" style="margin-bottom:1rem" onclick="if(confirm('End practice?')){appState.practice=null;renderMain()}">✕ End Practice</button>
-  <div class="question-shell">
-    <div class="q-progress">
-      <span>Q${p.cur+1}/${p.qs.length}</span>
-      <div class="q-progress-bar"><div class="q-progress-fill" style="width:${pct}%"></div></div>
-      <div class="q-score"><span class="cor">✓${p.correct}</span><span class="wrg">✗${p.wrong}</span></div>
+  <div style="margin-bottom:1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+    <button class="back-btn" onclick="endPracticeEarly()">← Topics</button>
+    <span style="font-size:.82rem;color:var(--text2);flex:1">${esc(appData.topics[p.topicId]?.title||'')}</span>
+    <button class="btn btn-accent btn-sm" onclick="finishPractice()">Finish & See Results</button>
+  </div>
+  <div class="qmode-layout">
+    <div class="qpalette-wrap">
+      <div class="qpalette-header">
+        <span>Questions</span>
+        <span>${answeredCount}/${p.qs.length} done</span>
+      </div>
+      <div class="qpalette">
+        ${p.qs.map((_,i)=>{
+          const a=p.answered[i];
+          let cls='qp-btn';
+          if(i===p.cur)cls+=' current';
+          else if(a!==null){
+            const q2=p.qs[i];
+            const isCorrect=(q2.questionGroup)
+              ? _allSubsCorrect(q2,a)
+              : a===q2.correct;
+            cls+=isCorrect?' answered-correct':' answered-wrong';
+          }
+          return `<button class="${cls}" onclick="practicGoTo(${i})" title="Q${i+1}">${i+1}</button>`;
+        }).join('')}
+      </div>
+      <div class="qpalette-legend">
+        <span><i style="background:rgba(34,197,94,.4);border:1px solid var(--success)"></i>Correct</span>
+        <span><i style="background:rgba(239,68,68,.25);border:1px solid var(--danger)"></i>Incorrect</span>
+        <span><i style="border:2px solid var(--accent);background:var(--glow)"></i>Current</span>
+        <span><i style="border:1px solid var(--border);background:var(--bg3)"></i>Unanswered</span>
+      </div>
+      <button class="qp-end-btn btn btn-ghost" onclick="endPracticeEarly()" style="font-size:.78rem;color:var(--text2)">✕ Exit without saving</button>
     </div>
-    ${renderQCard(q,ans,'practice')}
-    ${ans!==null?`<div class="q-nav"><span></span>
-      <button class="btn btn-accent" onclick="practiceNext()">
-        ${p.cur<p.qs.length-1?'Next →':'See Results →'}
-      </button></div>`:''}
+    <div>
+      <div style="font-size:.78rem;color:var(--text2);margin-bottom:.6rem;display:flex;justify-content:space-between">
+        <span>Question ${p.cur+1} of ${p.qs.length}</span>
+        <span><span style="color:var(--success);font-weight:700">✓${p.correct}</span> &nbsp; <span style="color:var(--danger);font-weight:700">✗${p.wrong}</span></span>
+      </div>
+      ${renderQCard(q,ans,'practice')}
+      ${ans!==null?`
+      <div class="q-nav" style="justify-content:space-between;margin-top:.75rem">
+        <button class="btn btn-ghost btn-sm" onclick="practicGoTo(${Math.max(0,p.cur-1)})" ${p.cur===0?'disabled':''}>← Prev</button>
+        ${p.cur<p.qs.length-1
+          ?`<button class="btn btn-accent btn-sm" onclick="practicGoTo(${p.cur+1})">Next →</button>`
+          :`<button class="btn btn-accent btn-sm" onclick="finishPractice()">Finish →</button>`}
+      </div>`:`
+      <div class="q-nav" style="justify-content:space-between;margin-top:.75rem">
+        <button class="btn btn-ghost btn-sm" onclick="practicGoTo(${Math.max(0,p.cur-1)})" ${p.cur===0?'disabled':''}>← Prev</button>
+        <button class="btn btn-ghost btn-sm" onclick="practicGoTo(${Math.min(p.qs.length-1,p.cur+1)})" ${p.cur===p.qs.length-1?'disabled':''}>Skip →</button>
+      </div>`}
+    </div>
   </div>`;
 }
+
+function _allSubsCorrect(q,ans){
+  if(!q.questionGroup||typeof ans!=='object'||!ans)return false;
+  return q.questionGroup.questions.every((sq,si)=>ans[si]===sq.correct);
+}
+
 function practiceSubmit(i){
   const p=appState.practice;if(!p||p.answered[p.cur]!==null)return;
   p.answered[p.cur]=i;
   (i===p.qs[p.cur].correct)?p.correct++:p.wrong++;
   renderMain();
 }
-function practiceNext(){appState.practice.cur++;renderMain();}
+
+function practiceSubmit_sub(si,oi){
+  const p=appState.practice;if(!p)return;
+  const q=p.qs[p.cur];if(!q.questionGroup)return;
+  if(!p.answered[p.cur])p.answered[p.cur]={};
+  if(p.answered[p.cur][si]!==undefined)return;
+  p.answered[p.cur][si]=oi;
+  const sq=q.questionGroup.questions[si];
+  if(oi===sq.correct)p.correct++;else p.wrong++;
+  renderMain();
+}
+
+function endPracticeEarly(){
+  if(appState.practice?.answered?.some(a=>a!==null)){
+    if(!confirm('End practice? Your progress will be lost.'))return;
+  }
+  appState.practice=null;
+  setView('practice');
+}
+
+function finishPractice(){
+  const p=appState.practice;
+  const done=p.answered.filter(a=>a!==null).length;
+  if(done===0){showToast('Answer at least one question first','error');return;}
+  if(done<p.qs.length){
+    if(!confirm(`You have answered ${done} of ${p.qs.length} questions.\nUnanswered questions will be marked as incorrect.\n\nFinish and see results?`))return;
+  }
+  renderPracticeResults();
+}
+
 function renderPracticeResults(){
   const p=appState.practice;
   const pct=Math.round(p.correct/p.qs.length*100);
@@ -697,20 +807,24 @@ function renderPracticeResults(){
   const missed=p.qs.map((q,i)=>({q,chosen:p.answered[i],correct:p.answered[i]===q.correct}));
   const reviewHTML=missed.filter(x=>!x.correct).slice(0,10).map((x,i)=>`
     <div class="review-item">
-      <div class="review-meta">Question ${i+1} — Incorrect</div>
+      <div class="review-meta">Q${i+1} — ${x.chosen===null?'Not answered':'Incorrect'}</div>
       <div class="review-q">${esc(x.q.question?.substring(0,120)||'')}</div>
       <div class="review-ans">✓ Correct answer: ${optLabel(x.q,x.q.correct)}</div>
       ${x.q.explanation?`<div class="review-exp">${mdParse(x.q.explanation)}</div>`:''}
     </div>`).join('');
+  const answeredCount=p.answered.filter(a=>a!==null).length;
+  // Replace practice state with null so re-renders show results correctly
+  const snapshot={...p};
+  appState.practice=null;
   return `<div class="result-screen">
     <div class="result-icon">${pct>=75?'🎉':pct>=50?'📈':'💪'}</div>
     <div class="result-topic">${esc(t?.title||'')}</div>
     <div class="result-pct">${pct}%</div>
     <div class="result-grade">${gradeLabel(pct)}</div>
-    <div class="result-sub">${p.correct} correct of ${p.qs.length} questions</div>
+    <div class="result-sub">${snapshot.correct} correct · ${snapshot.wrong} wrong · ${snapshot.qs.length-answeredCount} skipped</div>
     <div class="result-actions">
-      <button class="btn btn-accent" onclick="startPractice('${eA(p.topicId)}')">Try Again</button>
-      <button class="btn btn-ghost" onclick="appState.practice=null;setView('practice')">← Topics</button>
+      <button class="btn btn-accent" onclick="startPractice('${eA(snapshot.topicId)}')">Try Again</button>
+      <button class="btn btn-ghost" onclick="setView('practice')">← Topics</button>
     </div>
     ${missed.some(x=>!x.correct)?`<div style="text-align:left;margin-top:1rem"><strong style="font-size:.88rem;color:var(--text2)">Missed Questions (review):</strong><div style="margin-top:.75rem">${reviewHTML}</div></div>`:''}
   </div>`;
@@ -734,84 +848,150 @@ function renderQuiz(){
   <div class="topic-grid">
     ${topics.map(([id,t])=>{
       const qs=flattenQ(t.practice);
+      const totalMin=qs.length*2;
       return `<div class="topic-card" onclick="startQuiz('${eA(id)}')">
         <div class="tc-id">Topic ${esc(id)}</div>
         <div class="tc-title">${esc(t.title)}</div>
-        <div class="tc-meta">${qs.length} question${qs.length!==1?'s':''} · ${qs.length*2} min</div>
+        <div class="tc-meta">${qs.length} question${qs.length!==1?'s':''} · ${totalMin} min total</div>
       </div>`;
     }).join('')}
   </div>`;
 }
+
 function startQuiz(id){
   const t=appData.topics[id];if(!t?.practice?.length)return;
   if(appState.quiz?.timer)clearInterval(appState.quiz.timer);
   const qs=flattenQ(t.practice);
-  const limit=qs.length*2*60;
-  appState.quiz={topicId:id,qs,cur:0,answers:Array(qs.length).fill(null),
-    timeLimit:limit,remaining:limit,started:true,ended:false,
-    timer:setInterval(quizTick,1000)};
+  const limit=qs.length*2*60; // 2 min per question total
+  appState.quiz={
+    topicId:id, qs, cur:0,
+    answers:Array(qs.length).fill(null),
+    timeLimit:limit, remaining:limit,
+    started:true, ended:false,
+    timer:setInterval(quizTick,1000)
+  };
   appState.view='quiz';
   renderMain();
 }
+
 function quizTick(){
   if(!appState.quiz)return;
   appState.quiz.remaining--;
   if(appState.quiz.remaining<=0){endQuiz();return;}
+  // Update timer display without full re-render
+  const qz=appState.quiz;
+  const m=Math.floor(qz.remaining/60),s=qz.remaining%60;
   const el=document.getElementById('quiz-timer');
   if(el){
-    const m=Math.floor(appState.quiz.remaining/60),s=appState.quiz.remaining%60;
     el.textContent=`⏱ ${pad(m)}:${pad(s)}`;
-    if(appState.quiz.remaining<60)el.classList.add('urgent');else el.classList.remove('urgent');
+    if(qz.remaining<60)el.classList.add('urgent');else el.classList.remove('urgent');
   }
+  const fill=document.getElementById('quiz-timer-fill');
+  if(fill)fill.style.width=Math.round(qz.remaining/qz.timeLimit*100)+'%';
 }
+
+function quizGoTo(idx){
+  appState.quiz.cur=idx;
+  renderMain();
+}
+
 function renderQuizQ(){
   const qz=appState.quiz;
   const q=qz.qs[qz.cur];
+  const ans=qz.answers[qz.cur];
   const m=Math.floor(qz.remaining/60),s=qz.remaining%60;
-  const pct=Math.round(qz.cur/qz.qs.length*100);
+  const timePct=Math.round(qz.remaining/qz.timeLimit*100);
+  const answeredCount=qz.answers.filter(a=>a!==null).length;
+  const urgent=qz.remaining<60;
   return `
-  <button class="back-btn" style="margin-bottom:1rem"
-    onclick="if(confirm('Abandon quiz? Progress will be lost.')){clearInterval(appState.quiz.timer);appState.quiz=null;setView('quiz')}">✕ Abandon Quiz</button>
-  <div class="question-shell">
-    <div class="q-progress">
-      <span>Q${qz.cur+1}/${qz.qs.length}</span>
-      <div class="q-progress-bar"><div class="q-progress-fill" style="width:${pct}%"></div></div>
-      <span id="quiz-timer" class="quiz-timer${qz.remaining<60?' urgent':''}">⏱ ${pad(m)}:${pad(s)}</span>
+  <div style="margin-bottom:1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+    <button class="back-btn" onclick="abandonQuiz()">← Exit</button>
+    <span style="font-size:.82rem;color:var(--text2);flex:1">${esc(appData.topics[qz.topicId]?.title||'')}</span>
+    <button class="btn btn-accent btn-sm" onclick="confirmEndQuiz()">Submit Quiz</button>
+  </div>
+  <div class="quiz-totalbar">
+    <span id="quiz-timer" class="quiz-totalbar-timer${urgent?' urgent':''}">⏱ ${pad(m)}:${pad(s)}</span>
+    <div class="quiz-totalbar-progress">
+      <div id="quiz-timer-fill" class="quiz-totalbar-fill" style="width:${timePct}%"></div>
     </div>
-    ${renderQCard(q,qz.answers[qz.cur],'quiz')}
-    ${qz.answers[qz.cur]!==null?`
-    <div class="q-nav"><span></span>
-      <button class="btn btn-accent" onclick="quizNext()">
-        ${qz.cur<qz.qs.length-1?'Next →':'Finish Quiz →'}
-      </button>
-    </div>`:
-    `<div class="q-nav">
-      <button class="btn btn-warning btn-sm" onclick="quizSkip()">Skip</button>
-      <span style="font-size:.8rem;color:var(--text2)">Select an answer to continue</span>
-    </div>`}
+    <span style="font-size:.78rem;color:var(--text2);white-space:nowrap">${answeredCount}/${qz.qs.length} answered</span>
+  </div>
+  <div class="qmode-layout">
+    <div class="qpalette-wrap">
+      <div class="qpalette-header">
+        <span>Questions</span>
+        <span>${answeredCount}/${qz.qs.length}</span>
+      </div>
+      <div class="qpalette">
+        ${qz.qs.map((_,i)=>{
+          const a=qz.answers[i];
+          let cls='qp-btn';
+          if(i===qz.cur)cls+=' current';
+          else if(a!==null)cls+=' answered-done';
+          return `<button class="${cls}" onclick="quizGoTo(${i})" title="Q${i+1}">${i+1}</button>`;
+        }).join('')}
+      </div>
+      <div class="qpalette-legend">
+        <span><i style="border:1px solid var(--info);background:rgba(56,189,248,.12)"></i>Answered</span>
+        <span><i style="border:2px solid var(--accent);background:var(--glow)"></i>Current</span>
+        <span><i style="border:1px solid var(--border);background:var(--bg3)"></i>Unanswered</span>
+      </div>
+      <button class="qp-end-btn btn btn-accent" onclick="confirmEndQuiz()" style="margin-bottom:.4rem">Submit Quiz</button>
+      <button class="qp-end-btn btn btn-ghost" onclick="abandonQuiz()" style="font-size:.78rem;color:var(--text2)">✕ Abandon</button>
+    </div>
+    <div>
+      <div style="font-size:.78rem;color:var(--text2);margin-bottom:.6rem">
+        Question ${qz.cur+1} of ${qz.qs.length}
+      </div>
+      ${renderQCard(q,ans,'quiz')}
+      <div class="q-nav" style="justify-content:space-between;margin-top:.75rem">
+        <button class="btn btn-ghost btn-sm" onclick="quizGoTo(${Math.max(0,qz.cur-1)})" ${qz.cur===0?'disabled':''}>← Prev</button>
+        <button class="btn ${ans!==null?'btn-accent':'btn-ghost'} btn-sm" onclick="quizGoTo(${Math.min(qz.qs.length-1,qz.cur+1)})" ${qz.cur===qz.qs.length-1?'disabled':''}>
+          ${ans!==null?'Next →':'Skip →'}
+        </button>
+      </div>
+    </div>
   </div>`;
 }
+
 function quizSubmit(i){
   const qz=appState.quiz;if(!qz||qz.answers[qz.cur]!==null)return;
   qz.answers[qz.cur]=i;
   renderMain();
 }
-function quizSkip(){
-  appState.quiz.cur++;
-  if(appState.quiz.cur>=appState.quiz.qs.length)endQuiz();
-  else renderMain();
+
+function quizSubmit_sub(si,oi){
+  const qz=appState.quiz;if(!qz)return;
+  const q=qz.qs[qz.cur];if(!q.questionGroup)return;
+  if(!qz.answers[qz.cur])qz.answers[qz.cur]={};
+  if(qz.answers[qz.cur][si]!==undefined)return;
+  qz.answers[qz.cur][si]=oi;
+  renderMain();
 }
-function quizNext(){
-  appState.quiz.cur++;
-  if(appState.quiz.cur>=appState.quiz.qs.length)endQuiz();
-  else renderMain();
+
+function confirmEndQuiz(){
+  const qz=appState.quiz;if(!qz)return;
+  const unanswered=qz.answers.filter(a=>a===null).length;
+  if(unanswered>0){
+    if(!confirm(`You have ${unanswered} unanswered question${unanswered!==1?'s':''}.\nThey will be marked as incorrect.\n\nSubmit now?`))return;
+  }
+  endQuiz();
 }
+
+function abandonQuiz(){
+  if(!confirm('Abandon this quiz? All progress will be lost.'))return;
+  clearInterval(appState.quiz?.timer);
+  appState.quiz=null;
+  setView('quiz');
+}
+
 function endQuiz(){
   if(!appState.quiz)return;
   clearInterval(appState.quiz.timer);
   appState.quiz.ended=true;
   renderMain();
 }
+
 function renderQuizResults(){
   const qz=appState.quiz;
   const answered=qz.answers.filter(a=>a!==null).length;
@@ -820,6 +1000,7 @@ function renderQuizResults(){
   const t=appData.topics[qz.topicId];
   recordStats(qz.topicId,correct,qz.qs.length,'Quiz');
   const elapsed=qz.timeLimit-qz.remaining;
+  const skipped=qz.answers.filter(a=>a===null).length;
   const reviewHTML=qz.qs.map((q,i)=>({q,chosen:qz.answers[i],ok:qz.answers[i]===q.correct}))
     .filter(x=>!x.ok).slice(0,8).map((x,idx)=>`
     <div class="review-item">
@@ -833,7 +1014,7 @@ function renderQuizResults(){
     <div class="result-topic">Quiz — ${esc(t?.title||'')}</div>
     <div class="result-pct">${pct}%</div>
     <div class="result-grade">${gradeLabel(pct)}</div>
-    <div class="result-sub">${correct}/${qz.qs.length} correct · ${answered} answered · Time: ${pad(Math.floor(elapsed/60))}:${pad(elapsed%60)}</div>
+    <div class="result-sub">${correct}/${qz.qs.length} correct · ${skipped} skipped · Time used: ${pad(Math.floor(elapsed/60))}:${pad(elapsed%60)} of ${pad(Math.floor(qz.timeLimit/60))}:00</div>
     <div class="result-actions">
       <button class="btn btn-accent" onclick="startQuiz('${eA(qz.topicId)}')">Retake Quiz</button>
       <button class="btn btn-ghost" onclick="appState.quiz=null;setView('quiz')">← Topics</button>
