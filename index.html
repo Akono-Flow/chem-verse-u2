@@ -2465,6 +2465,7 @@ function pad(n){return String(n).padStart(2,'0');}
   const auth = await requireAppAccess('mcq2', 'no-access.html');
   if (!auth) return;
   document.getElementById('page-loader').remove();
+    await init();
 
 });
 </script>
